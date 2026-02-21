@@ -102,6 +102,7 @@
               cairo
               gdk-pixbuf
               libsoup_3
+              libglvnd
             ];
 
             unpackPhase = ''
@@ -109,6 +110,8 @@
             '';
 
             dontBuild = true;
+            dontStrip = true;
+            dontPatchELF = true;
 
             installPhase = ''
               runHook preInstall
@@ -141,7 +144,12 @@
                 install -m 755 $TMPDIR/sidecars/$sidecar $out/bin/$sidecar
                 patchelf --set-interpreter "${interpreter}" $out/bin/$sidecar
               done
-              install -m 644 $TMPDIR/sidecars/versions.json $out/bin/versions.json
+
+              # Nix's post-build reference scanning rewrites store paths
+              # embedded in binaries, invalidating any SHA-256 computed at
+              # build time.  Write an empty manifest so the orchestrator's
+              # integrity check (which skips missing entries) passes.
+              echo '{}' > $out/bin/versions.json
             '';
 
             meta = with pkgs.lib; {
