@@ -91,7 +91,7 @@
             nativeBuildInputs = with pkgs; [
               dpkg
               autoPatchelfHook
-              makeWrapper
+              wrapGAppsHook3
               patchelf
             ];
 
@@ -103,6 +103,9 @@
               gdk-pixbuf
               libsoup_3
               libglvnd
+              gsettings-desktop-schemas
+              glib-networking
+              librsvg
             ];
 
             unpackPhase = ''
@@ -112,6 +115,10 @@
             dontBuild = true;
             dontStrip = true;
             dontPatchELF = true;
+
+            # Prevent wrapGAppsHook3 from wrapping all binaries automatically;
+            # we only want to wrap the main Tauri binary, not the Bun sidecars.
+            dontWrapGApps = true;
 
             installPhase = ''
               runHook preInstall
@@ -140,6 +147,10 @@
             # After autoPatchelfHook runs, install sidecar binaries with
             # interpreter-only patching to preserve the Bun JS payload.
             postFixup = ''
+              # Wrap only the main Tauri binary with GTK/GSettings env vars
+              # so the file chooser dialog works (GSettings schemas needed).
+              wrapProgram $out/bin/openwork "''${gappsWrapperArgs[@]}"
+
               for sidecar in opencode openwork-orchestrator openwork-server opencode-router chrome-devtools-mcp; do
                 install -m 755 $TMPDIR/sidecars/$sidecar $out/bin/$sidecar
                 patchelf --set-interpreter "${interpreter}" $out/bin/$sidecar
