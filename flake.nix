@@ -284,6 +284,16 @@
                 OPENWORK_DATA_DIR = "${cfg.dataDir}/orchestrator";
                 OPENWORK_SIDECAR_DIR = "${cfg.dataDir}/sidecars";
                 HOME = cfg.dataDir;
+                # Sidecar binaries (opencode, openwork-server, opencode-router) are
+                # generic Linux ELF binaries downloaded at runtime.  NixOS needs
+                # NIX_LD so the stub dynamic linker can find the real interpreter.
+                NIX_LD = "${pkgs.stdenv.cc.libc}/lib/ld-linux-${
+                  if pkgs.stdenv.hostPlatform.isAarch64 then "aarch64" else "x86-64"
+                }.so.2";
+                NIX_LD_LIBRARY_PATH = lib.makeLibraryPath [
+                  pkgs.stdenv.cc.cc.lib
+                  pkgs.stdenv.cc.libc
+                ];
               };
 
               path = with pkgs; [
