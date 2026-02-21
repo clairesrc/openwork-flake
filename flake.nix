@@ -284,6 +284,10 @@
                 OPENWORK_DATA_DIR = "${cfg.dataDir}/orchestrator";
                 OPENWORK_SIDECAR_DIR = "${cfg.dataDir}/sidecars";
                 HOME = cfg.dataDir;
+                # The compiled Bun binary can't resolve the opencode version
+                # at runtime (package.json field inaccessible, GitHub API call
+                # fails silently).  Pin the version so the download succeeds.
+                OPENCODE_VERSION = "1.2.10";
               };
 
               path = with pkgs; [
