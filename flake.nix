@@ -390,6 +390,7 @@
                 unzip
                 gzip
                 sqlite
+                nix
               ] ++ lib.optionals (cfg.sandbox.mode == "docker") [
                 pkgs.docker
               ];
