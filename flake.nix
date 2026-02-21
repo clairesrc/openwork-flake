@@ -389,6 +389,7 @@
                 gnutar
                 unzip
                 gzip
+                sqlite
               ] ++ lib.optionals (cfg.sandbox.mode == "docker") [
                 pkgs.docker
               ];
