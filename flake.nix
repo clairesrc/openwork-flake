@@ -14,10 +14,14 @@
         x86_64-linux = {
           npmPkg = "openwork-orchestrator-linux-x64";
           hash = "sha256-a8F8TYgde7YgnxbQX4CSxtH9SSXKYAifsyIsIjHISkg=";
+          desktopDeb = "openwork-desktop-linux-amd64.deb";
+          desktopHash = "sha256-vGmVmAtWCKZBqBC17gY8OtYGf2v+EsMAUsv94KoH4wM=";
         };
         aarch64-linux = {
           npmPkg = "openwork-orchestrator-linux-arm64";
           hash = "sha256-hGutvNmU9eBNWjA8bEwmEBcnUWUSn5ECuTQ+gZDRYHM=";
+          desktopDeb = "openwork-desktop-linux-arm64.deb";
+          desktopHash = "sha256-xZi1rKAJUlL7AItxf2wOfJhOL4437yY7AMRbLyFpe0I=";
         };
       };
 
@@ -34,6 +38,8 @@
       packages = forEachSystem ({ system, pkgs }:
         let
           meta = platforms.${system};
+          arch = if system == "aarch64-linux" then "aarch64" else "x86-64";
+          interpreter = "${pkgs.stdenv.cc.libc}/lib/ld-linux-${arch}.so.2";
         in
         {
           openwork = pkgs.stdenv.mkDerivation {
@@ -56,22 +62,90 @@
             dontStrip = true;
             dontPatchELF = true;
 
-            installPhase =
-              let
-                interpreter = "${pkgs.stdenv.cc.libc}/lib/ld-linux-${
-                  if system == "aarch64-linux" then "aarch64" else "x86-64"
-                }.so.2";
-              in
-              ''
-                runHook preInstall
-                mkdir -p $out/bin
-                install -m 755 package/bin/openwork $out/bin/openwork
-                patchelf --set-interpreter "${interpreter}" $out/bin/openwork
-                runHook postInstall
-              '';
+            installPhase = ''
+              runHook preInstall
+              mkdir -p $out/bin
+              install -m 755 package/bin/openwork $out/bin/openwork
+              patchelf --set-interpreter "${interpreter}" $out/bin/openwork
+              runHook postInstall
+            '';
 
             meta = with pkgs.lib; {
               description = "OpenWork – local-first AI agent orchestrator (opencode + server + router)";
+              homepage = "https://github.com/different-ai/openwork";
+              license = licenses.mit;
+              platforms = supportedSystems;
+              mainProgram = "openwork";
+            };
+          };
+
+          openwork-desktop = pkgs.stdenv.mkDerivation {
+            pname = "openwork-desktop";
+            inherit version;
+
+            src = pkgs.fetchurl {
+              url = "https://github.com/different-ai/openwork/releases/download/v${version}/${meta.desktopDeb}";
+              hash = meta.desktopHash;
+            };
+
+            nativeBuildInputs = with pkgs; [
+              dpkg
+              autoPatchelfHook
+              makeWrapper
+              patchelf
+            ];
+
+            buildInputs = with pkgs; [
+              webkitgtk_4_1
+              gtk3
+              glib
+              cairo
+              gdk-pixbuf
+              libsoup_3
+            ];
+
+            unpackPhase = ''
+              dpkg-deb -x $src .
+            '';
+
+            dontBuild = true;
+
+            installPhase = ''
+              runHook preInstall
+              mkdir -p $out/bin $out/share
+
+              # Install the main Tauri binary (autoPatchelfHook will patch it)
+              install -m 755 usr/bin/openwork $out/bin/openwork
+
+              # Stage sidecar binaries in a temp dir so autoPatchelfHook
+              # does NOT process them (Bun standalone binaries get corrupted
+              # by full ELF rewriting).
+              mkdir -p $TMPDIR/sidecars
+              for sidecar in opencode openwork-orchestrator openwork-server opencode-router chrome-devtools-mcp; do
+                install -m 755 usr/bin/$sidecar $TMPDIR/sidecars/$sidecar
+              done
+              install -m 644 usr/bin/versions.json $TMPDIR/sidecars/versions.json
+
+              # Install desktop file and icons
+              cp -r usr/share/* $out/share/
+              substituteInPlace $out/share/applications/OpenWork.desktop \
+                --replace-fail "Exec=openwork" "Exec=$out/bin/openwork" \
+                --replace-fail "Icon=openwork" "Icon=openwork"
+              runHook postInstall
+            '';
+
+            # After autoPatchelfHook runs, install sidecar binaries with
+            # interpreter-only patching to preserve the Bun JS payload.
+            postFixup = ''
+              for sidecar in opencode openwork-orchestrator openwork-server opencode-router chrome-devtools-mcp; do
+                install -m 755 $TMPDIR/sidecars/$sidecar $out/bin/$sidecar
+                patchelf --set-interpreter "${interpreter}" $out/bin/$sidecar
+              done
+              install -m 644 $TMPDIR/sidecars/versions.json $out/bin/versions.json
+            '';
+
+            meta = with pkgs.lib; {
+              description = "OpenWork Desktop – Tauri-based GUI for the OpenWork AI agent orchestrator";
               homepage = "https://github.com/different-ai/openwork";
               license = licenses.mit;
               platforms = supportedSystems;
@@ -388,6 +462,7 @@
 
       overlays.default = final: prev: {
         openwork = self.packages.${final.system}.openwork;
+        openwork-desktop = self.packages.${final.system}.openwork-desktop;
       };
     };
 }
