@@ -344,7 +344,6 @@
                   Restart = "on-failure";
                   RestartSec = 5;
 
-                  StateDirectory = lib.removePrefix "/var/lib/" cfg.dataDir;
                   WorkingDirectory = cfg.workspace;
 
                   # Hardening
